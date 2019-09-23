@@ -1,14 +1,14 @@
-#Project Insider
+# Project Insider
 
 Project Insider is a tool for relaying messages from discord to other discord servers, and even other platforms. It boasts a simple text interface to configure multiple relays, and a log of relay activity.
 
-##Requirements
+## Requirements
 * Python ≥ 3.6
   * [requests](https://pypi.org/project/requests/)
   * [discord.py](https://pypi.org/project/discord.py/)
   * [tabulate](https://pypi.org/project/tabulate/)
   
-##Compatible Platforms
+## Compatible Platforms
 * Discord Webhook
 * Slack App Webhook
 * Remote Slackbot Webhook
