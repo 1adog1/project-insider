@@ -1,15 +1,13 @@
 import requests
 import json
 
-successfulCodes = ["200", "201", "202", "203", "204"]
-
 def postToSlackbot(message, URL):
     totalErrors = 0
 
     while True:
         toPost = requests.post(URL, data=message, headers={'Content-Type': 'text/plain'})
     
-        if str(toPost.status_code) in successfulCodes:
+        if toPost.status_code == requests.codes.ok:
             return True
             
         else:
@@ -32,7 +30,7 @@ def postToSlack(message, URL):
     while True:
         toPost = requests.post(URL, data=json.dumps(slack_data), headers={"Content-Type" : "application/json"})
     
-        if str(toPost.status_code) in successfulCodes:
+        if toPost.status_code == requests.codes.ok:
             return True
             
         else:
@@ -55,7 +53,7 @@ def postToDiscord(message, URL):
     while True:
         toPost = requests.post(URL, data=discord_data)
         
-        if str(toPost.status_code) in successfulCodes:
+        if toPost.status_code == requests.codes.ok:
             return True
             
         else:
@@ -69,3 +67,13 @@ def postToDiscord(message, URL):
                 print("Tried and failed to send discord message 10 times.")
 
                 return False
+                
+def getSender(senderType):
+
+    senders = {
+        "Slackbot": postToSlackbot,
+        "Slack": postToSlack,
+        "Discord": postToDiscord
+    }
+    
+    return senders[senderType]

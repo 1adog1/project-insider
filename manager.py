@@ -12,7 +12,6 @@ import secrets
 import traceback
 
 import sender
-import templates
 
 from pathlib import Path
 from datetime import datetime, timedelta
@@ -101,7 +100,7 @@ RESET - Calls the Initial Setup tool so you can modify your app information whil
     """)
     
 def generateJoinLink():
-    print("\nGive this link to a server owner for you to relay messages from their server: \nhttps://discordapp.com/api/oauth2/authorize?client_id=" + criticalData["clientid"] + "&scope=bot&permissions=66560\n")
+    print("\nGive this link to a server owner for you to relay messages from their server: \nhttps://discord.com/api/oauth2/authorize?client_id=" + criticalData["clientid"] + "&scope=bot&permissions=66560\n")
 
 def testConnection():
     loop = asyncio.get_event_loop()
@@ -147,7 +146,7 @@ else:
     toRun = connection.cursor()
     
     toRun.execute("CREATE TABLE critical (key text, value text)")
-    toRun.execute("CREATE TABLE configurations (uuid text, name text, created integer, destination text, hookurl text, template text, server text, channel text, author text, keyword text)")
+    toRun.execute("CREATE TABLE configurations (uuid text, name text, created integer, destination text, hookurl text, template text, server text, channel text, author text, keyword text, priority integer)")
     toRun.execute("CREATE TABLE reports (messageid text, created integer, server text, channel text, author text, message text, sentto text)")
     
     connection.commit()
@@ -228,16 +227,60 @@ Example images can be found here: https://imgur.com/a/dwptAhn
         else:
             print("No corresponding type, enter a number from the above possibilities.")
             
-    newServer = input("Server name to restrict to (Leave blank for no restriction): ")
-    newChannel = input("Channel name to restrict to (Leave blank for no restriction): ")
-    newAuthor = input("Author username to restrict to (Leave blank for no restriction): ")
-    newKeyword = input("Keyword to restrict to (Leave blank for no restriction): ")
+    print("\nThe following conditions can contain a single value, no value (no restriction), or more than one value in a comma-separated format.")
+    
+    newServer = input("Server names to restrict to: ")
+    
+    newServer = newServer.replace(", ", ",").lower()
+    serverList = list(filter(None, newServer.split(",")))
+    formattedServers = json.dumps(serverList)
+    
+    newChannel = input("Channel names to restrict to: ")
+    
+    newChannel = newChannel.replace(", ", ",").lower()
+    channelList = list(filter(None, newChannel.split(",")))
+    formattedChannels = json.dumps(channelList)
+    
+    newAuthor = input("Author usernames to restrict to: ")
+    
+    newAuthor = newAuthor.replace(", ", ",").lower()
+    authorList = list(filter(None, newAuthor.split(",")))
+    formattedAuthors = json.dumps(authorList)
+    
+    newKeyword = input("Keywords to restrict to: ")
+    
+    newKeyword = newKeyword.replace(" ", "").lower()
+    keywordList = list(filter(None, newKeyword.split(",")))
+    formattedKeywords = json.dumps(keywordList)
+    
+    print("""
+What priority would you like this configuration to be?
+
+Priorities are used to determine if a message should be relayed multiple times. They're integers that follow these rules:
+
+ - Messages WILL ALWAYS be sent to configurations with priority -1, provided its conditions are met.
+ - Messages will be sent to higher priority configurations first.
+ - Messages WILL NOT be sent if a higher priority configuration has already relayed it.
+ - Messages WILL be sent if an equal priority configuration has already relayed it. 
+    """)
+    
+    while True:
+    
+        newPriority = int(input("Enter a priority: "))
+        
+        if newPriority >= -1:
+        
+            break
+            
+        else:
+        
+            print("Invalid Priority, you need to enter a priority of >= -1.")
     
     toNotify = input("\nIf you would like to send details of this configuration to the destination channel, type YES (case sensitive), otherwise type anything else: ")
     
     creationOccured = int(time.time())
     
-    toRun.execute("INSERT INTO configurations VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", (uniqueConfigurationID, newName, creationOccured, newType, newURL, newTemplate, newServer, newChannel, newAuthor, newKeyword))    
+    toRun.execute("INSERT INTO configurations VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", (uniqueConfigurationID, newName, creationOccured, newType, newURL, newTemplate, formattedServers, formattedChannels, formattedAuthors, formattedKeywords, newPriority))    
     toRun.execute("UPDATE critical SET value=? WHERE key=?", (str(int(time.time())),"lastupdate"))
     
     connection.commit()
@@ -245,7 +288,7 @@ Example images can be found here: https://imgur.com/a/dwptAhn
     syncConfigurations()
     
     if toNotify == "YES":
-        toSend = "A New Relay Has Been Created!\n\nName: " + newName + "\nRestrictions:\n```\nServer: " + newServer + "\nChannel: " + newChannel + "\nAuthor: " + newAuthor + "\nKeyword: " + newKeyword + "\n```"
+        toSend = "A New Relay Has Been Created!\n\nName: " + newName + "\nRestrictions:\n```\nServers: " + ",".join(serverList) + "\nChannels: " + ",".join(channelList) + "\nAuthors: " + ",".join(authorList) + "\nKeywords: " + ",".join(keywordList) + "\nPriority: " + str(newPriority) + "\n```"
 
         if newType == "Slackbot":
             sender.postToSlackbot(toSend, newURL)
@@ -261,7 +304,7 @@ Example images can be found here: https://imgur.com/a/dwptAhn
 def deleteConfig(configID):
     actuallyExists = False
 
-    for configUUID, configName, configCreated, configDestination, configURL, configTemplate, configServer, configChannel, configAuthor, configKeyword in toRun.execute("SELECT * FROM configurations WHERE uuid=?", (configID,)):
+    for configUUID, configName in toRun.execute("SELECT uuid, name FROM configurations WHERE uuid=?", (configID,)):
         toRun.execute("DELETE FROM configurations WHERE uuid=?", (configID,))
         toRun.execute("UPDATE critical SET value=? WHERE key=?", (str(int(time.time())),"lastupdate"))
         
@@ -280,23 +323,14 @@ def showStatus():
         
     listToDisplay = []
     
-    for configUUID, configName, configCreated, configDestination, configURL, configTemplate, configServer, configChannel, configAuthor, configKeyword in configurations:
+    for configUUID, configName, configCreated, configDestination, configURL, configTemplate, configServer, configChannel, configAuthor, configKeyword, configPriority in configurations:
         niceTime = datetime.utcfromtimestamp(configCreated).strftime('%d %B, %Y - %H:%M:%S')
         
-        if configServer == "":
-            configServer = "[NONE]"
-        if configChannel == "":
-            configChannel = "[NONE]"
-        if configAuthor == "":
-            configAuthor = "[NONE]"
-        if configKeyword == "":
-            configKeyword = "[NONE]"
-        
-        conditionsToPrint = "Server: " + configServer + "\nChannel: " + configChannel + "\nAuthor: " + configAuthor + "\nKeyword: " + configKeyword
+        conditionsToPrint = "Servers: " + ",".join(json.loads(configServer)) + "\nChannels: " + ",".join(json.loads(configChannel)) + "\nAuthors: " + ",".join(json.loads(configAuthor)) + "\nKeywords: " + ",".join(json.loads(configKeyword))
     
-        listToDisplay.append([configUUID, configName, niceTime, configDestination, configTemplate, conditionsToPrint])
+        listToDisplay.append([configUUID, configName, niceTime, configDestination, configTemplate, conditionsToPrint, configPriority])
         
-    print("\n" + tabulate(listToDisplay, headers=['UUID', 'Name', 'Created', 'Type', 'Template', 'Conditions'], tablefmt='grid') + "\n")
+    print("\n" + tabulate(listToDisplay, headers=['UUID', 'Name', 'Created', 'Type', 'Template', 'Conditions', 'Priority'], tablefmt='grid') + "\n")
        
 def generateReport(configID):
     listToDisplay = []
@@ -307,22 +341,13 @@ def generateReport(configID):
     
     idExists = False
 
-    for configUUID, configName, configCreated, configDestination, configURL, configTemplate, configServer, configChannel, configAuthor, configKeyword in toRun.execute("SELECT * FROM configurations WHERE uuid=?", (configID,)):
+    for configUUID, configName, configCreated, configDestination, configURL, configTemplate, configServer, configChannel, configAuthor, configKeyword, configPriority in toRun.execute("SELECT * FROM configurations WHERE uuid=?", (configID,)):
     
         niceTime = datetime.utcfromtimestamp(configCreated).strftime('%d %B, %Y - %H:%M:%S')
-
-        if configServer == "":
-            configServer = "[NONE]"
-        if configChannel == "":
-            configChannel = "[NONE]"
-        if configAuthor == "":
-            configAuthor = "[NONE]"
-        if configKeyword == "":
-            configKeyword = "[NONE]"
         
-        conditionsToPrint = "Server: " + configServer + "\nChannel: " + configChannel + "\nAuthor: " + configAuthor + "\nKeyword: " + configKeyword
+        conditionsToPrint = "Servers: " + ",".join(json.loads(configServer)) + "\nChannels: " + ",".join(json.loads(configChannel)) + "\nAuthors: " + ",".join(json.loads(configAuthor)) + "\nKeywords: " + ",".join(json.loads(configKeyword))
     
-        listToDisplay.append([configUUID, configName, niceTime, configDestination, configTemplate, conditionsToPrint])
+        listToDisplay.append([configUUID, configName, niceTime, configDestination, configTemplate, conditionsToPrint, configPriority])
         
         for logUUID, logTime, logServer, logChannel, logAuthor, logContent, logConfigID in toRun.execute("SELECT * FROM reports WHERE sentto=?", (configID,)):
             totalRelayed += 1
@@ -358,7 +383,7 @@ def generateReport(configID):
             firstRelay = "Never"
             averageBetweenRelayed = "No Messages Have Been Relayed"
                     
-        print("\n" + tabulate(listToDisplay, headers=['UUID', 'Name', 'Created', 'Type', 'Template', 'Conditions'], tablefmt='grid') + "\n\nCONFIGURATION ANALYSIS\n----------------------\nTotal Relayed: " + str(totalRelayed) + "\nFirst Relay: " + firstRelay + "\nMost Recent Relay: " + latestRelay + "\nAverage Time Between Relays: " + str(averageBetweenRelayed) + "\n")
+        print("\n" + tabulate(listToDisplay, headers=['UUID', 'Name', 'Created', 'Type', 'Template', 'Conditions', 'Priority'], tablefmt='grid') + "\n\nCONFIGURATION ANALYSIS\n----------------------\nTotal Relayed: " + str(totalRelayed) + "\nFirst Relay: " + firstRelay + "\nMost Recent Relay: " + latestRelay + "\nAverage Time Between Relays: " + str(averageBetweenRelayed) + "\n")
         
         idExists = True
         

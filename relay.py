@@ -12,8 +12,9 @@ import secrets
 from pathlib import Path
 
 import sender
-import templates
+import objects
 
+configurations = []
 loop = asyncio.get_event_loop()
 
 def dataFile():
@@ -33,16 +34,34 @@ while True:
         if Path(dataFile() + "/Data/data.db").is_file():
 
             criticalData = {}
-            configurations = []
             
             connection = sqlite3.connect(dataFile() + "/Data/data.db")
             toRun = connection.cursor()
             
             for criticalKey, criticalValue in toRun.execute("SELECT * FROM critical"):
                 criticalData[criticalKey] = criticalValue
-                
-            for row in toRun.execute("SELECT * FROM configurations"):
-                configurations.append(row)
+            
+            #Deleting any existing configurations
+            amountOfConfigs = len(configurations)
+            for x in range(0, amountOfConfigs):
+                del configurations[0]
+            
+            for configUUID, configName, configCreated, configDestination, configURL, configTemplate, configServers, configChannels, configAuthors, configKeywords, configPriority in toRun.execute("SELECT * FROM configurations ORDER BY priority DESC, uuid ASC"):
+            
+                configurations.append(
+                    objects.Configuration(
+                        configUUID, 
+                        configName, 
+                        configDestination, 
+                        configURL, 
+                        configTemplate, 
+                        json.loads(configServers), 
+                        json.loads(configChannels), 
+                        json.loads(configAuthors), 
+                        json.loads(configKeywords), 
+                        configPriority
+                    )
+                )
             
         else:
             raise Warning("Initial Setup Not Completed!")
@@ -50,7 +69,7 @@ while True:
         @client.event
         async def on_ready():
             print("---------------------------------------------------------------------------------------------------------------")
-            print("[" + time.strftime("%A, %d %B at %H:%M:%S %Z") + "] Discord Relay Version 1.00 - Successfully Activated")
+            print("[" + time.strftime("%A, %d %B at %H:%M:%S %Z") + "] Discord Relay Version 2.00 - Successfully Activated")
             print("---------------------------------------------------------------------------------------------------------------\n\n")
             print('Logged in as ' + client.user.name)
 
@@ -75,65 +94,43 @@ while True:
                 
                 if lastUpdated != criticalData["lastupdate"]:
                     
-                    configurations = []
-                    for row in toRun.execute("SELECT * FROM configurations"):
-                        configurations.append(row)
+                    #Deleting any existing configurations
+                    amountOfConfigs = len(configurations)
+                    for x in range(0, amountOfConfigs):
+                        del configurations[0]
+                    
+                    for configUUID, configName, configCreated, configDestination, configURL, configTemplate, configServers, configChannels, configAuthors, configKeywords, configPriority in toRun.execute("SELECT * FROM configurations ORDER BY priority DESC, uuid ASC"):
+                    
+                        configurations.append(
+                            objects.Configuration(
+                                configUUID, 
+                                configName, 
+                                configDestination, 
+                                configURL, 
+                                configTemplate, 
+                                json.loads(configServers), 
+                                json.loads(configChannels), 
+                                json.loads(configAuthors), 
+                                json.loads(configKeywords), 
+                                configPriority
+                            )
+                        )
                     
                     criticalData["lastupdate"] = lastUpdated
                     
-            for configUUID, configName, configCreated, configDestination, configURL, configTemplate, configServer, configChannel, configAuthor, configKeyword in configurations:
-                                    
-                if configServer == "" or configServer.lower() == server.lower():
-                    toPost = True
-                else:
-                    toPost = False
+            currentPriority = 0
+            for eachConfig in configurations:
                     
-                if toPost and (configChannel == "" or configChannel.lower() == channel.lower()):
-                    toPost = True
-                else:
-                    toPost = False
-                    
-                if toPost and (configAuthor == "" or configAuthor.lower() == author.lower()):
-                    toPost = True
-                else:
-                    toPost = False
-                    
-                if toPost and (configKeyword == "" or configKeyword.lower() in content.lower()):
-                    toPost = True
-                else:
-                    toPost = False
-                    
-                if toPost:
+                if eachConfig.checkToPost(server, channel, author, content, currentPriority):
                 
-                    template = templates.returnTemplate(configTemplate)
+                    eachConfig.sendMessage(stringTime, shortTime, author, authorName, server, channel, content)
                     
-                    toSend = template.format(longTime=stringTime, shortTime=shortTime, authorUsername=author, authorName=authorName, server=server, channel=channel, message=content)
-                    reportingTime = int(time.time())                    
-
-                    if configDestination == "Slackbot":
-                        toSend=toSend.replace("@everyone", "@channel")
-                        toSend=toSend.replace("**", "*")
-                    
-                    if configDestination == "Slack":
-                        toSend=toSend.replace("@everyone", "<!channel>")
-                        toSend=toSend.replace("**", "*")
-                                            
+                    currentPriority = eachConfig.priority
+                
                     uniqueMessageID = secrets.token_hex(8)
-                    toRun.execute("INSERT INTO reports VALUES (?, ?, ?, ?, ?, ?, ?)", (uniqueMessageID, reportingTime, server, channel, author, content, configUUID))
+                    toRun.execute("INSERT INTO reports VALUES (?, ?, ?, ?, ?, ?, ?)", (uniqueMessageID, int(time.time()), server, channel, author, content, eachConfig.UUID))
                     
                     connection.commit()
-                    
-                    if configDestination == "Slackbot":
-                        result = sender.postToSlackbot(toSend, configURL)
-                    
-                    if configDestination == "Slack":
-                        result = sender.postToSlack(toSend, configURL)
-                    
-                    if configDestination == "Discord":
-                        result = sender.postToDiscord(toSend, configURL)
-                    
-                    if result:
-                        print("[" + time.strftime("%d %B - %H:%M:%S UTC") + "] Message relayed to " + configName + ".")
         
         try:
 
