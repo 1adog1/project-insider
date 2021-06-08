@@ -1,4 +1,5 @@
 import time
+import re
 
 import sender
 
@@ -89,8 +90,16 @@ class Configuration:
         
             lineWords = eachLine.split(" ")
             
-            words += lineWords
+            for eachWord in lineWords:
             
+                words.append(eachWord)
+                
+                cleanWord = re.sub("[^A-Za-z0-9]+", "", eachWord)
+                
+                if cleanWord != eachWord:
+                    
+                    words.append(cleanWord)
+                
         for eachKeyword in self.keywords:
         
             if eachKeyword in words:
