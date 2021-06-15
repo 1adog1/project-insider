@@ -5,7 +5,7 @@ def postToSlackbot(message, URL):
     totalErrors = 0
 
     while True:
-        toPost = requests.post(URL, data=message, headers={'Content-Type': 'text/plain'})
+        toPost = requests.post(URL, data=message.encode("utf-8"), headers={"Content-Type": "text/plain", "charset": "UTF-8"})
     
         if toPost.status_code == requests.codes.ok:
             return True
