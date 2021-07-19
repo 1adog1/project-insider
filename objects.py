@@ -128,7 +128,7 @@ class Creator:
         print("""
         The following parameters will set the conditions that have to be met for a message to be relayed.
         
-        Each condition can contain a single value, no value (which means no restriction), or multiple values in a comma-seperated format (which is treated as an OR logical restriction). 
+        Each condition can contain a single value, no value (which means no restriction), or multiple values in a comma-separated format (which is treated as an OR logical restriction). 
         """)
     
         newServer = input("Server names to restrict to: ")

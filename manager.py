@@ -183,11 +183,11 @@ def translatorSetup():
     global criticalData
 
     print("""
-The translatior uses the Watson Language Translator service from IBM. 
+The translator uses the Watson Language Translator service from IBM. 
 
 This service can be used to freely translate up to 1,000,000 characters per month, or more using a paid plan.
 
-To continue, you'll need to setup an IBM Cloud Account and the Watson Language Translator sevice. Both of these you can setup via this link: https://www.ibm.com/cloud/watson-language-translator
+To continue, you'll need to setup an IBM Cloud Account and the Watson Language Translator service. Both of these you can setup via this link: https://www.ibm.com/cloud/watson-language-translator
     """)
     
     while True:
