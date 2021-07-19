@@ -193,7 +193,7 @@ To continue, you'll need to setup an IBM Cloud Account and the Watson Language T
     while True:
     
         newAPIKey = input("Enter your Credential API Key: ")
-        newURL = input("Enter your Creditial URL: ")
+        newURL = input("Enter your Credential URL: ")
         
         testingURL = newURL + "/v3/languages?version=2018-05-01"
         authTuple = ("apikey", newAPIKey)
