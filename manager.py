@@ -12,6 +12,7 @@ import secrets
 import traceback
 
 import sender
+import objects
 
 from pathlib import Path
 from datetime import datetime, timedelta
@@ -26,6 +27,17 @@ def dataFile():
 
     return(dataLocation)
 
+def syncCriticalData():
+    global criticalData
+    
+    criticalData = {}
+    
+    toRun.execute("UPDATE critical SET value=? WHERE key=?", (str(int(time.time())),"lastupdate"))
+    connection.commit()
+    
+    for criticalKey, criticalValue in toRun.execute("SELECT * FROM critical"):
+        criticalData[criticalKey] = criticalValue
+        
 def syncConfigurations():
     global configurations
     
@@ -66,11 +78,13 @@ Please make sure you have your app ready to go.
             
             connection.commit()
             
+            syncCriticalData()
+            
             print("Setup Complete! Here's your share link to get started: ")
             
             generateJoinLink()
             
-            print("Please be advised if the relay is currently running it will need to be restarted for these changes to take effect.\n")
+            print("Please be advised if the relay is currently running it will need to be restarted for these changes to take effect. If you already have a translator configured, that will also need to be setup again.\n")
             
             break
             
@@ -90,6 +104,7 @@ STATUS - Prints a list of all configurations.
 TEST - Tests your app settings to ensure a connection can be made. 
 SHARE - Generates a link for you to give to server admins so your bot can join their server.
 CREATE - Starts the creator for a new configuration. 
+TRANSLATOR - Calls the Translator Setup tool for translating messages.
 DELETE [uuid] - Deletes a configuration.
 REPORT [uuid] - Prints a report detailing the history of a configuration.
 LOGS - Prints a log of all relayed messages and their IDs.
@@ -103,6 +118,8 @@ def generateJoinLink():
     print("\nGive this link to a server owner for you to relay messages from their server: \nhttps://discord.com/api/oauth2/authorize?client_id=" + criticalData["clientid"] + "&scope=bot&permissions=66560\n")
 
 def testConnection():
+    global criticalData
+    
     loop = asyncio.get_event_loop()
 
     client = discord.Client()
@@ -123,193 +140,23 @@ def testConnection():
         print("\nTest Failed!\n")
     
         return False
-
-#############################
-#----- Startup Process -----#
-#############################
-    
-criticalData = {}
- 
-if Path(dataFile() + "/Data/data.db").is_file():
-    
-    connection = sqlite3.connect(dataFile() + "/Data/data.db")
-    toRun = connection.cursor()
-    
-    for criticalKey, criticalValue in toRun.execute("SELECT * FROM critical"):
-        criticalData[criticalKey] = criticalValue
-        
-    syncConfigurations()
-    
-else:
-    
-    connection = sqlite3.connect(dataFile() + "/Data/data.db")
-    toRun = connection.cursor()
-    
-    toRun.execute("CREATE TABLE critical (key text, value text)")
-    toRun.execute("CREATE TABLE configurations (uuid text, name text, created integer, destination text, hookurl text, template text, server text, channel text, author text, keyword text, priority integer)")
-    toRun.execute("CREATE TABLE reports (messageid text, created integer, server text, channel text, author text, message text, sentto text)")
-    
-    connection.commit()
-    
-    initialSetup()
-    
-    for criticalKey, criticalValue in toRun.execute("SELECT * FROM critical"):
-        criticalData[criticalKey] = criticalValue
-        
-    syncConfigurations()   
     
 def startCreator():
-    print("""
----------------------------------
-PROJECT INSIDER - Creation Wizard
----------------------------------
-    """)
-    
-    uniqueConfigurationID = secrets.token_hex(8)
-    
-    newName = input("Set a name for your configuration: ")
-    print("""
-What kind of relay are you creating?
-0 - Discord Webhook
-1 - Slack App Webhook
-2 - Remote Slackbot Webhook
-    """)
-    
-    typeOptions = [
-    "Discord",
-    "Slack",
-    "Slackbot"
-    ]
-    
-    while True:
-        typeSelection = int(input("Enter the corresponding number: "))
-        
-        if typeSelection >= 0 and typeSelection < 3:
-            newType = typeOptions[typeSelection]
-            
-            break
-            
-        else:
-            print("No corresponding type, enter a number from the above possibilities.")
-            
-    newURL = input("Enter the URL of the webhook you'll be relaying to: ")
 
-    templateOptions = [
-    "Imitation",
-    "Imitation w/ Username",
-    "Monitoring",
-    "Monitoring w/ Codeblocks",
-    "Jabber",
-    "Modern w/ Username",
-    "Modern w/ Display"
-    ]
+    objects.Creator(connection, criticalData)
     
-    print("""
-What kind of template would you like to use?
-Example images can be found here: https://imgur.com/a/dwptAhn
-0 - Imitation Post
-1 - Imitation Post With Username
-2 - Monitoring Post
-3 - Monitoring Post With Codeblocks
-4 - Jabber Imitation
-5 - Modern Ping With Username
-6 - Modern Ping With Display Name
-    """)
-    
-    while True:
-        templateSelection = int(input("Enter the corresponding number: "))
-        
-        if templateSelection >= 0 and templateSelection < 7:
-            newTemplate = templateOptions[templateSelection]
-            
-            break
-            
-        else:
-            print("No corresponding type, enter a number from the above possibilities.")
-            
-    print("\nThe following conditions can contain a single value, no value (no restriction), or more than one value in a comma-separated format.")
-    
-    newServer = input("Server names to restrict to: ")
-    
-    newServer = newServer.replace(", ", ",").lower()
-    serverList = list(filter(None, newServer.split(",")))
-    formattedServers = json.dumps(serverList)
-    
-    newChannel = input("Channel names to restrict to: ")
-    
-    newChannel = newChannel.replace(", ", ",").lower()
-    channelList = list(filter(None, newChannel.split(",")))
-    formattedChannels = json.dumps(channelList)
-    
-    newAuthor = input("Author usernames to restrict to: ")
-    
-    newAuthor = newAuthor.replace(", ", ",").lower()
-    authorList = list(filter(None, newAuthor.split(",")))
-    formattedAuthors = json.dumps(authorList)
-    
-    newKeyword = input("Keywords to restrict to: ")
-    
-    newKeyword = newKeyword.replace(" ", "").lower()
-    keywordList = list(filter(None, newKeyword.split(",")))
-    formattedKeywords = json.dumps(keywordList)
-    
-    print("""
-What priority would you like this configuration to be?
-
-Priorities are used to determine if a message should be relayed multiple times. They're integers that follow these rules:
-
- - Messages WILL ALWAYS be sent to configurations with priority -1, provided its conditions are met.
- - Messages will be sent to higher priority configurations first.
- - Messages WILL NOT be sent if a higher priority configuration has already relayed it.
- - Messages WILL be sent if an equal priority configuration has already relayed it. 
-    """)
-    
-    while True:
-    
-        newPriority = int(input("Enter a priority: "))
-        
-        if newPriority >= -1:
-        
-            break
-            
-        else:
-        
-            print("Invalid Priority, you need to enter a priority of >= -1.")
-    
-    toNotify = input("\nIf you would like to send details of this configuration to the destination channel, type YES (case sensitive), otherwise type anything else: ")
-    
-    creationOccured = int(time.time())
-    
-    toRun.execute("INSERT INTO configurations VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", (uniqueConfigurationID, newName, creationOccured, newType, newURL, newTemplate, formattedServers, formattedChannels, formattedAuthors, formattedKeywords, newPriority))    
-    toRun.execute("UPDATE critical SET value=? WHERE key=?", (str(int(time.time())),"lastupdate"))
-    
-    connection.commit()
-    
+    syncCriticalData()
     syncConfigurations()
-    
-    if toNotify == "YES":
-        toSend = "A New Relay Has Been Created!\n\nName: " + newName + "\nRestrictions:\n```\nServers: " + ",".join(serverList) + "\nChannels: " + ",".join(channelList) + "\nAuthors: " + ",".join(authorList) + "\nKeywords: " + ",".join(keywordList) + "\nPriority: " + str(newPriority) + "\n```"
-
-        if newType == "Slackbot":
-            sender.postToSlackbot(toSend, newURL)
-        
-        if newType == "Slack":
-            sender.postToSlack(toSend, newURL)
-        
-        if newType == "Discord":
-            sender.postToDiscord(toSend, newURL)
-    
-    print("\nConfiguration Created! If you opted to you should see a message in the destination channel detailing it. If you don't, delete it and try again.\n")
 
 def deleteConfig(configID):
     actuallyExists = False
 
     for configUUID, configName in toRun.execute("SELECT uuid, name FROM configurations WHERE uuid=?", (configID,)):
         toRun.execute("DELETE FROM configurations WHERE uuid=?", (configID,))
-        toRun.execute("UPDATE critical SET value=? WHERE key=?", (str(int(time.time())),"lastupdate"))
         
         connection.commit()
         
+        syncCriticalData()
         syncConfigurations()
         
         print("\nThe configuration " + configName + " has been deleted.\n")
@@ -323,15 +170,64 @@ def showStatus():
         
     listToDisplay = []
     
-    for configUUID, configName, configCreated, configDestination, configURL, configTemplate, configServer, configChannel, configAuthor, configKeyword, configPriority in configurations:
+    for configUUID, configName, configCreated, configDestination, configURL, configTemplate, configServer, configChannel, configAuthor, configKeyword, configPriority, configTranslator in configurations:
         niceTime = datetime.utcfromtimestamp(configCreated).strftime('%d %B, %Y - %H:%M:%S')
         
         conditionsToPrint = "Servers: " + ",".join(json.loads(configServer)) + "\nChannels: " + ",".join(json.loads(configChannel)) + "\nAuthors: " + ",".join(json.loads(configAuthor)) + "\nKeywords: " + ",".join(json.loads(configKeyword))
     
-        listToDisplay.append([configUUID, configName, niceTime, configDestination, configTemplate, conditionsToPrint, configPriority])
+        listToDisplay.append([configUUID, configName, niceTime, configDestination, configTemplate, conditionsToPrint, configPriority, configTranslator])
         
-    print("\n" + tabulate(listToDisplay, headers=['UUID', 'Name', 'Created', 'Type', 'Template', 'Conditions', 'Priority'], tablefmt='grid') + "\n")
+    print("\n" + tabulate(listToDisplay, headers=['UUID', 'Name', 'Created', 'Type', 'Template', 'Conditions', 'Priority', 'Translation'], tablefmt='grid') + "\n")
        
+def translatorSetup():
+    global criticalData
+
+    print("""
+The translatior uses the Watson Language Translator service from IBM. 
+
+This service can be used to freely translate up to 1,000,000 characters per month, or more using a paid plan.
+
+To continue, you'll need to setup an IBM Cloud Account and the Watson Language Translator sevice. Both of these you can setup via this link: https://www.ibm.com/cloud/watson-language-translator
+    """)
+    
+    while True:
+    
+        newAPIKey = input("Enter your Credential API Key: ")
+        newURL = input("Enter your Creditial URL: ")
+        
+        testingURL = newURL + "/v3/languages?version=2018-05-01"
+        authTuple = ("apikey", newAPIKey)
+        
+        testCall = requests.get(testingURL, auth=authTuple)
+        
+        if testCall.status_code == requests.codes.ok:
+            
+            toRun.execute("DELETE FROM critical WHERE key=?", ("translationurl",))
+            toRun.execute("DELETE FROM critical WHERE key=?", ("translationapikey",))
+            toRun.execute("INSERT INTO critical VALUES (?, ?)", ("translationurl", newURL))
+            toRun.execute("INSERT INTO critical VALUES (?, ?)", ("translationapikey", newAPIKey))
+            
+            connection.commit()
+            
+            syncCriticalData()
+        
+            testResponse = json.loads(testCall.text)
+            
+            print("\nSuccessfully Added! Here's a list of fully supported languages: \n")
+            
+            for eachLanguage in testResponse["languages"]:
+            
+                if eachLanguage["supported_as_source"] and eachLanguage["supported_as_target"]:
+                
+                    print(eachLanguage["language_name"] + " (" + eachLanguage["language"] + ")")
+            
+            print("")
+            break
+            
+        else:
+        
+            print("Invalid Model, the format for base models is ??-??, where each ?? is a language id.")
+
 def generateReport(configID):
     listToDisplay = []
     times = []
@@ -341,13 +237,13 @@ def generateReport(configID):
     
     idExists = False
 
-    for configUUID, configName, configCreated, configDestination, configURL, configTemplate, configServer, configChannel, configAuthor, configKeyword, configPriority in toRun.execute("SELECT * FROM configurations WHERE uuid=?", (configID,)):
+    for configUUID, configName, configCreated, configDestination, configURL, configTemplate, configServer, configChannel, configAuthor, configKeyword, configPriority, configTranslator in toRun.execute("SELECT * FROM configurations WHERE uuid=?", (configID,)):
     
         niceTime = datetime.utcfromtimestamp(configCreated).strftime('%d %B, %Y - %H:%M:%S')
         
         conditionsToPrint = "Servers: " + ",".join(json.loads(configServer)) + "\nChannels: " + ",".join(json.loads(configChannel)) + "\nAuthors: " + ",".join(json.loads(configAuthor)) + "\nKeywords: " + ",".join(json.loads(configKeyword))
     
-        listToDisplay.append([configUUID, configName, niceTime, configDestination, configTemplate, conditionsToPrint, configPriority])
+        listToDisplay.append([configUUID, configName, niceTime, configDestination, configTemplate, conditionsToPrint, configPriority, configTranslator])
         
         for logUUID, logTime, logServer, logChannel, logAuthor, logContent, logConfigID in toRun.execute("SELECT * FROM reports WHERE sentto=?", (configID,)):
             totalRelayed += 1
@@ -383,7 +279,7 @@ def generateReport(configID):
             firstRelay = "Never"
             averageBetweenRelayed = "No Messages Have Been Relayed"
                     
-        print("\n" + tabulate(listToDisplay, headers=['UUID', 'Name', 'Created', 'Type', 'Template', 'Conditions', 'Priority'], tablefmt='grid') + "\n\nCONFIGURATION ANALYSIS\n----------------------\nTotal Relayed: " + str(totalRelayed) + "\nFirst Relay: " + firstRelay + "\nMost Recent Relay: " + latestRelay + "\nAverage Time Between Relays: " + str(averageBetweenRelayed) + "\n")
+        print("\n" + tabulate(listToDisplay, headers=['UUID', 'Name', 'Created', 'Type', 'Template', 'Conditions', 'Priority', 'Translation'], tablefmt='grid') + "\n\nCONFIGURATION ANALYSIS\n----------------------\nTotal Relayed: " + str(totalRelayed) + "\nFirst Relay: " + firstRelay + "\nMost Recent Relay: " + latestRelay + "\nAverage Time Between Relays: " + str(averageBetweenRelayed) + "\n")
         
         idExists = True
         
@@ -444,6 +340,40 @@ def wipeLogs():
     else:
         print("\nCancelling.\n")
 
+#############################
+#----- Startup Process -----#
+#############################
+    
+criticalData = {}
+ 
+if Path(dataFile() + "/Data/data.db").is_file():
+    
+    connection = sqlite3.connect(dataFile() + "/Data/data.db")
+    toRun = connection.cursor()
+    
+    for criticalKey, criticalValue in toRun.execute("SELECT * FROM critical"):
+        criticalData[criticalKey] = criticalValue
+        
+    syncConfigurations()
+    
+else:
+    
+    connection = sqlite3.connect(dataFile() + "/Data/data.db")
+    toRun = connection.cursor()
+    
+    toRun.execute("CREATE TABLE critical (key text, value text)")
+    toRun.execute("CREATE TABLE configurations (uuid text, name text, created integer, destination text, hookurl text, template text, server text, channel text, author text, keyword text, priority integer, translation text)")
+    toRun.execute("CREATE TABLE reports (messageid text, created integer, server text, channel text, author text, message text, sentto text)")
+    
+    connection.commit()
+    
+    initialSetup()
+    
+    for criticalKey, criticalValue in toRun.execute("SELECT * FROM critical"):
+        criticalData[criticalKey] = criticalValue
+        
+    syncConfigurations()   
+
 ################################
 #----- Command Dictionary -----#
 ################################
@@ -454,6 +384,7 @@ commandKey = {
 "TEST":{"Function":testConnection, "Has Argument":False},
 "SHARE":{"Function":generateJoinLink, "Has Argument":False},
 "CREATE":{"Function":startCreator, "Has Argument":False},
+"TRANSLATOR":{"Function":translatorSetup, "Has Argument":False},
 "DELETE":{"Function":deleteConfig, "Has Argument":True},
 "REPORT":{"Function":generateReport, "Has Argument":True},
 "LOGS":{"Function":showLogs, "Has Argument":False},

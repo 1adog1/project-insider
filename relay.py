@@ -46,7 +46,7 @@ while True:
             for x in range(0, amountOfConfigs):
                 del configurations[0]
             
-            for configUUID, configName, configCreated, configDestination, configURL, configTemplate, configServers, configChannels, configAuthors, configKeywords, configPriority in toRun.execute("SELECT * FROM configurations ORDER BY priority DESC, uuid ASC"):
+            for configUUID, configName, configCreated, configDestination, configURL, configTemplate, configServers, configChannels, configAuthors, configKeywords, configPriority, configTranslation in toRun.execute("SELECT * FROM configurations ORDER BY priority DESC, uuid ASC"):
             
                 configurations.append(
                     objects.Configuration(
@@ -59,7 +59,8 @@ while True:
                         json.loads(configChannels), 
                         json.loads(configAuthors), 
                         json.loads(configKeywords), 
-                        configPriority
+                        configPriority,
+                        configTranslation
                     )
                 )
             
@@ -69,13 +70,13 @@ while True:
         @client.event
         async def on_ready():
             print("---------------------------------------------------------------------------------------------------------------")
-            print("[" + time.strftime("%A, %d %B at %H:%M:%S %Z") + "] Discord Relay Version 2.00 - Successfully Activated")
+            print("[" + time.strftime("%A, %d %B at %H:%M:%S %Z") + "] Discord Relay Version 3.00 - Successfully Activated")
             print("---------------------------------------------------------------------------------------------------------------\n\n")
-            print('Logged in as ' + client.user.name)
+            print("Logged in as " + client.user.name)
 
         @client.event
         async def on_message(message):
-            global configurations
+            global configurations, criticalData
         
             stringTime = str(message.created_at.strftime("%d %B - %H:%M:%S UTC"))
             shortTime =	 str(message.created_at.strftime("%H:%M"))
@@ -89,17 +90,16 @@ while True:
 
             content = str(message.content)
             
-            for criticalKey, criticalValue in toRun.execute("SELECT * FROM critical WHERE key=?", ("lastupdate",)):
-                lastUpdated = criticalValue
+            for criticalKey, criticalValue in toRun.execute("SELECT * FROM critical"):
+            
+                if criticalKey == "lastupdate" and criticalValue != criticalData["lastupdate"]:
                 
-                if lastUpdated != criticalData["lastupdate"]:
-                    
                     #Deleting any existing configurations
                     amountOfConfigs = len(configurations)
                     for x in range(0, amountOfConfigs):
                         del configurations[0]
                     
-                    for configUUID, configName, configCreated, configDestination, configURL, configTemplate, configServers, configChannels, configAuthors, configKeywords, configPriority in toRun.execute("SELECT * FROM configurations ORDER BY priority DESC, uuid ASC"):
+                    for configUUID, configName, configCreated, configDestination, configURL, configTemplate, configServers, configChannels, configAuthors, configKeywords, configPriority, configTranslation in toRun.execute("SELECT * FROM configurations ORDER BY priority DESC, uuid ASC"):
                     
                         configurations.append(
                             objects.Configuration(
@@ -112,18 +112,25 @@ while True:
                                 json.loads(configChannels), 
                                 json.loads(configAuthors), 
                                 json.loads(configKeywords), 
-                                configPriority
+                                configPriority,
+                                configTranslation
                             )
                         )
-                    
-                    criticalData["lastupdate"] = lastUpdated
+                        
+                criticalData[criticalKey] = criticalValue
                     
             currentPriority = 0
             for eachConfig in configurations:
                     
                 if eachConfig.checkToPost(server, channel, author, content, currentPriority):
                 
-                    eachConfig.sendMessage(stringTime, shortTime, author, authorName, server, channel, content)
+                    if "translationurl" in criticalData and "translationapikey" in criticalData:
+                    
+                        eachConfig.sendMessage(stringTime, shortTime, author, authorName, server, channel, content, criticalData["translationurl"], criticalData["translationapikey"])
+                    
+                    else:
+                    
+                        eachConfig.sendMessage(stringTime, shortTime, author, authorName, server, channel, content)
                     
                     currentPriority = eachConfig.priority
                 
@@ -137,7 +144,7 @@ while True:
             loop.run_until_complete(client.start(criticalData["token"]))
             
         except KeyboardInterrupt:
-            print('Manual Shutdown Initiated')
+            print("Manual Shutdown Initiated")
             connection.close()
             
             for task in asyncio.Task.all_tasks(loop):
@@ -158,7 +165,7 @@ while True:
             print(str(currentError) + " - Trying Again...")
 
     except KeyboardInterrupt:
-        print('Manual Shutdown Initiated')
+        print("Manual Shutdown Initiated")
         connection.close()
         
         for task in asyncio.Task.all_tasks(loop):

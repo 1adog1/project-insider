@@ -1,5 +1,6 @@
 import requests
 import json
+import time
 
 def postToSlackbot(message, URL):
     totalErrors = 0
@@ -13,14 +14,14 @@ def postToSlackbot(message, URL):
         else:
             totalErrors += 1
 
-            print("Error Sending Slack Message With Staus Code " + str(toPost.status_code) + " - Trying Again")
+            print("Error Sending Slack Message With Status Code " + str(toPost.status_code) + " - Trying Again")
 
             time.sleep(1)
                         
             if totalErrors == 10:
                 print("Tried and failed to send slack message 10 times.")
 
-                return False  
+                return False
     
 def postToSlack(message, URL):
     totalErrors = 0
@@ -36,14 +37,14 @@ def postToSlack(message, URL):
         else:
             totalErrors += 1
 
-            print("Error Sending Slack Message With Staus Code " + str(toPost.status_code) + " - Trying Again")
+            print("Error Sending Slack Message With Status Code " + str(toPost.status_code) + " - Trying Again")
 
             time.sleep(1)
                         
             if totalErrors == 10:
                 print("Tried and failed to send slack message 10 times.")
 
-                return False    
+                return False
     
 def postToDiscord(message, URL):
     totalErrors = 0
@@ -53,13 +54,13 @@ def postToDiscord(message, URL):
     while True:
         toPost = requests.post(URL, data=discord_data)
         
-        if toPost.status_code == requests.codes.ok:
+        if toPost.status_code == requests.codes.ok or toPost.status_code == 204:
             return True
             
         else:
             totalErrors += 1
 
-            print("Error Sending Discord Message With Staus Code " + str(toPost.status_code) + " - Trying Again")
+            print("Error Sending Discord Message With Status Code " + str(toPost.status_code) + " - Trying Again")
 
             time.sleep(1)
                         
