@@ -18,6 +18,8 @@ from pathlib import Path
 from datetime import datetime, timedelta
 from tabulate import tabulate
 
+intents = discord.Intents(messages=True, message_content=True, guilds=True)
+
 def dataFile():
 
     filename = inspect.getframeinfo(inspect.currentframe()).filename
@@ -122,7 +124,7 @@ def testConnection():
     
     loop = asyncio.get_event_loop()
 
-    client = discord.Client()
+    client = discord.Client(intents=intents)
 
     @client.event
     async def on_ready():

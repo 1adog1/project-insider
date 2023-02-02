@@ -17,6 +17,8 @@ import objects
 configurations = []
 loop = asyncio.get_event_loop()
 
+intents = discord.Intents(messages=True, message_content=True, guilds=True)
+
 def dataFile():
 
     filename = inspect.getframeinfo(inspect.currentframe()).filename
@@ -29,7 +31,7 @@ def dataFile():
 while True:
     try:
 
-        client = discord.Client()
+        client = discord.Client(intents=intents)
         
         if Path(dataFile() + "/Data/data.db").is_file():
 
@@ -147,7 +149,7 @@ while True:
             print("Manual Shutdown Initiated")
             connection.close()
             
-            for task in asyncio.Task.all_tasks(loop):
+            for task in asyncio.all_tasks(loop):
                 task.cancel()
                 
             try:
@@ -157,7 +159,7 @@ while True:
 
         except:
             currentError = str(sys.exc_info()[1])
-            for task in asyncio.Task.all_tasks(loop):
+            for task in asyncio.all_tasks(loop):
                 task.cancel()
 			
             connection.close()
@@ -168,7 +170,7 @@ while True:
         print("Manual Shutdown Initiated")
         connection.close()
         
-        for task in asyncio.Task.all_tasks(loop):
+        for task in asyncio.all_tasks(loop):
             task.cancel()
             
         try:
@@ -185,7 +187,7 @@ while True:
 
     except:
         currentError = str(sys.exc_info()[1])
-        for task in asyncio.Task.all_tasks(loop):
+        for task in asyncio.all_tasks(loop):
             task.cancel()
 		
         connection.close()
