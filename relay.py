@@ -15,7 +15,7 @@ import sender
 import objects
 
 configurations = []
-loop = asyncio.get_event_loop()
+loop = asyncio.new_event_loop()
 
 intents = discord.Intents(messages=True, message_content=True, guilds=True)
 

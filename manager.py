@@ -122,7 +122,7 @@ def generateJoinLink():
 def testConnection():
     global criticalData
     
-    loop = asyncio.get_event_loop()
+    loop = asyncio.new_event_loop()
 
     client = discord.Client(intents=intents)
 
@@ -135,7 +135,10 @@ def testConnection():
         
     try:
         loop.run_until_complete(client.start(criticalData["token"]))
-                
+        
+        for task in asyncio.all_tasks(loop):
+            task.cancel()
+            
         return True
     
     except:
